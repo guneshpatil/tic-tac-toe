@@ -69,8 +69,16 @@ export default function Game() {
 
   useEffect(() => {
     if (!hydrated) return;
-    if (isKids && !prevIsKidsRef.current && ai !== "off") setAi("off");
+    if (prevIsKidsRef.current !== isKids) {
+      setBoard(emptyBoard(size));
+      setTurn("X");
+    }
     prevIsKidsRef.current = isKids;
+  }, [isKids, hydrated, size]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (isKids && !prevIsKidsRef.current && ai !== "off") setAi("off");
   }, [isKids, hydrated, ai]);
 
   useEffect(() => {
