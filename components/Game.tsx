@@ -1,14 +1,30 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Board, Player, Status } from "@/lib/types";
+import type { Board, Status } from "@/lib/types";
 import { calculateWinner, isDraw } from "@/lib/game";
 
 const STORAGE_KEY = "ttt:score:v1";
 const MODE_KEY = "ttt:mode:v1";
+const SET_KEY = "ttt:set:v1";
 
 type Scores = Record<"X" | "O" | "draw", number>;
 type Mode = "adult" | "kids";
+type Symbol = string;
+type PlayerSet = {
+  id: "classic" | "girl-boy" | "animals";
+  label: string;
+  X: Symbol;
+  O: Symbol;
+  xColor: string;
+  oColor: string;
+};
+
+const PLAYER_SETS: PlayerSet[] = [
+  { id: "classic",   label: "Classic",  X: "X", O: "O", xColor: "text-x",       oColor: "text-o"       },
+  { id: "girl-boy",  label: "Girl 🦄 vs Boy", X: "🦄", O: "🚀", xColor: "text-pink-500", oColor: "text-sky-500"   },
+  { id: "animals",   label: "Animals",  X: "🐱", O: "🐶", xColor: "text-amber-500", oColor: "text-emerald-500" },
+];
 
 const emptyScores: Scores = { X: 0, O: 0, draw: 0 };
 
@@ -17,7 +33,13 @@ export default function Game() {
   const [turn, setTurn] = useState<"X" | "O">("X");
   const [scores, setScores] = useState<Scores>(emptyScores);
   const [mode, setMode] = useState<Mode>("adult");
+  const [setId, setSetId] = useState<PlayerSet["id"]>("classic");
   const [hydrated, setHydrated] = useState(false);
+
+  const set = useMemo(
+    () => PLAYER_SETS.find((s) => s.id === setId) ?? PLAYER_SETS[0],
+    [setId]
+  );
 
   useEffect(() => {
     try {
@@ -25,6 +47,8 @@ export default function Game() {
       if (rawScores) setScores({ ...emptyScores, ...JSON.parse(rawScores) });
       const rawMode = localStorage.getItem(MODE_KEY) as Mode | null;
       if (rawMode === "adult" || rawMode === "kids") setMode(rawMode);
+      const rawSet = localStorage.getItem(SET_KEY) as PlayerSet["id"] | null;
+      if (rawSet && PLAYER_SETS.some((s) => s.id === rawSet)) setSetId(rawSet);
     } catch {}
     setHydrated(true);
   }, []);
@@ -42,6 +66,13 @@ export default function Game() {
       localStorage.setItem(MODE_KEY, mode);
     } catch {}
   }, [mode, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(SET_KEY, setId);
+    } catch {}
+  }, [setId, hydrated]);
 
   const status: Status = useMemo(() => {
     const w = calculateWinner(board);
@@ -79,22 +110,23 @@ export default function Game() {
     }
   }, [status]);
 
+  const symbol = (p: "X" | "O") => (p === "X" ? set.X : set.O);
+
   const message =
     status.kind === "won"
       ? mode === "kids"
-        ? status.winner === "X"
-          ? "🎉 X wins! Great job!"
-          : "🎉 O wins! Great job!"
-        : `Player ${status.winner} wins!`
+        ? `🎉 ${symbol(status.winner)} wins! Great job!`
+        : `Player ${symbol(status.winner)} wins!`
       : status.kind === "draw"
       ? mode === "kids"
         ? "🤝 It's a tie! Try again!"
         : "It's a draw."
       : mode === "kids"
-      ? `👉 ${turn}'s turn!`
-      : `Player ${turn}'s turn`;
+      ? `👉 ${symbol(turn)}'s turn!`
+      : `Player ${symbol(turn)}'s turn`;
 
   const isKids = mode === "kids";
+  const turnColor = turn === "X" ? set.xColor : set.oColor;
 
   return (
     <div
@@ -132,6 +164,33 @@ export default function Game() {
           />
         </div>
 
+        <div className="mt-4 flex justify-center flex-wrap gap-2">
+          {PLAYER_SETS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setSetId(s.id)}
+              aria-pressed={setId === s.id}
+              className={`px-3 py-1.5 rounded-full text-sm font-semibold transition flex items-center gap-1.5 ${
+                setId === s.id
+                  ? isKids
+                    ? "bg-white text-sky-700 shadow"
+                    : "bg-slate-100 text-slate-900"
+                  : isKids
+                  ? "bg-white/20 text-white hover:bg-white/30"
+                  : "bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700"
+              }`}
+            >
+              <span aria-hidden>{s.X}</span>
+              <span className="opacity-60">vs</span>
+              <span aria-hidden>{s.O}</span>
+              {setId !== s.id && (
+                <span className="hidden sm:inline ml-1 opacity-70">{s.label}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
         <p
           className={`mt-4 ${
             isKids ? "text-2xl font-bold text-white drop-shadow" : "text-lg"
@@ -141,9 +200,7 @@ export default function Game() {
               ? "text-emerald-400"
               : status.kind === "draw"
               ? "text-amber-400"
-              : turn === "X"
-              ? "text-x"
-              : "text-o")
+              : turnColor)
           }`}
           aria-live="polite"
         >
@@ -173,14 +230,14 @@ export default function Game() {
               }
               className={`cell ${isWin ? "win" : ""} ${
                 isKids ? "kids-cell" : ""
-              } ${cell === "X" ? "text-x" : cell === "O" ? "text-o" : ""}`}
+              } ${cell === "X" ? set.xColor : cell === "O" ? set.oColor : ""}`}
             >
               <span
                 className={`leading-none select-none font-black ${
-                  isKids ? "text-7xl sm:text-8xl" : "text-5xl sm:text-6xl"
+                  isKids ? "text-6xl sm:text-7xl" : "text-5xl sm:text-6xl"
                 }`}
               >
-                {cell}
+                {cell ? symbol(cell) : ""}
               </span>
             </button>
           );
@@ -189,9 +246,9 @@ export default function Game() {
 
       {!isKids && (
         <div className="mt-6 grid grid-cols-3 gap-3 text-center">
-          <Score label="X" value={scores.X} color="text-x" />
+          <Score label={set.X} value={scores.X} color={set.xColor} />
           <Score label="Draws" value={scores.draw} color="text-amber-400" />
-          <Score label="O" value={scores.O} color="text-o" />
+          <Score label={set.O} value={scores.O} color={set.oColor} />
         </div>
       )}
 
