@@ -10,20 +10,19 @@ const SET_KEY = "ttt:set:v1";
 
 type Scores = Record<"X" | "O" | "draw", number>;
 type Mode = "adult" | "kids";
-type Symbol = string;
 type PlayerSet = {
   id: "classic" | "girl-boy" | "animals";
   label: string;
-  X: Symbol;
-  O: Symbol;
+  X: string;
+  O: string;
   xColor: string;
   oColor: string;
 };
 
 const PLAYER_SETS: PlayerSet[] = [
-  { id: "classic",   label: "Classic",  X: "X", O: "O", xColor: "text-x",       oColor: "text-o"       },
-  { id: "girl-boy",  label: "Girl 🦄 vs Boy", X: "🦄", O: "🚀", xColor: "text-pink-500", oColor: "text-sky-500"   },
-  { id: "animals",   label: "Animals",  X: "🐱", O: "🐶", xColor: "text-amber-500", oColor: "text-emerald-500" },
+  { id: "classic",  label: "Classic",        X: "X",  O: "O",  xColor: "text-x",          oColor: "text-o"          },
+  { id: "girl-boy", label: "Girl 🦄 vs Boy", X: "🦄", O: "🚀", xColor: "text-pink-500",   oColor: "text-sky-500"    },
+  { id: "animals",  label: "Animals",        X: "🐱", O: "🐶", xColor: "text-amber-500",  oColor: "text-emerald-500"},
 ];
 
 const emptyScores: Scores = { X: 0, O: 0, draw: 0 };
@@ -36,10 +35,20 @@ export default function Game() {
   const [setId, setSetId] = useState<PlayerSet["id"]>("classic");
   const [hydrated, setHydrated] = useState(false);
 
+  const isKids = mode === "kids";
+
   const set = useMemo(
-    () => PLAYER_SETS.find((s) => s.id === setId) ?? PLAYER_SETS[0],
-    [setId]
+    () =>
+      isKids
+        ? PLAYER_SETS.find((s) => s.id === setId) ?? PLAYER_SETS[0]
+        : PLAYER_SETS[0],
+    [setId, isKids]
   );
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!isKids && setId !== "classic") setSetId("classic");
+  }, [isKids, hydrated, setId]);
 
   useEffect(() => {
     try {
@@ -70,9 +79,10 @@ export default function Game() {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      localStorage.setItem(SET_KEY, setId);
+      if (isKids) localStorage.setItem(SET_KEY, setId);
+      else localStorage.removeItem(SET_KEY);
     } catch {}
-  }, [setId, hydrated]);
+  }, [setId, isKids, hydrated]);
 
   const status: Status = useMemo(() => {
     const w = calculateWinner(board);
@@ -111,27 +121,27 @@ export default function Game() {
   }, [status]);
 
   const symbol = (p: "X" | "O") => (p === "X" ? set.X : set.O);
+  const turnColor = turn === "X" ? set.xColor : set.oColor;
 
   const message =
     status.kind === "won"
-      ? mode === "kids"
+      ? isKids
         ? `🎉 ${symbol(status.winner)} wins! Great job!`
         : `Player ${symbol(status.winner)} wins!`
       : status.kind === "draw"
-      ? mode === "kids"
+      ? isKids
         ? "🤝 It's a tie! Try again!"
         : "It's a draw."
-      : mode === "kids"
+      : isKids
       ? `👉 ${symbol(turn)}'s turn!`
       : `Player ${symbol(turn)}'s turn`;
-
-  const isKids = mode === "kids";
-  const turnColor = turn === "X" ? set.xColor : set.oColor;
 
   return (
     <div
       className={`w-full max-w-md transition-colors duration-300 ${
-        isKids ? "bg-gradient-to-b from-sky-400 to-emerald-300 p-6 rounded-3xl shadow-2xl" : ""
+        isKids
+          ? "bg-gradient-to-b from-sky-400 to-emerald-300 p-6 rounded-3xl shadow-2xl"
+          : ""
       }`}
     >
       <header className="mb-6 text-center">
@@ -164,32 +174,30 @@ export default function Game() {
           />
         </div>
 
-        <div className="mt-4 flex justify-center flex-wrap gap-2">
-          {PLAYER_SETS.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setSetId(s.id)}
-              aria-pressed={setId === s.id}
-              className={`px-3 py-1.5 rounded-full text-sm font-semibold transition flex items-center gap-1.5 ${
-                setId === s.id
-                  ? isKids
+        {isKids && (
+          <div className="mt-4 flex justify-center flex-wrap gap-2">
+            {PLAYER_SETS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setSetId(s.id)}
+                aria-pressed={setId === s.id}
+                className={`px-3 py-1.5 rounded-full text-sm font-semibold transition flex items-center gap-1.5 ${
+                  setId === s.id
                     ? "bg-white text-sky-700 shadow"
-                    : "bg-slate-100 text-slate-900"
-                  : isKids
-                  ? "bg-white/20 text-white hover:bg-white/30"
-                  : "bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700"
-              }`}
-            >
-              <span aria-hidden>{s.X}</span>
-              <span className="opacity-60">vs</span>
-              <span aria-hidden>{s.O}</span>
-              {setId !== s.id && (
-                <span className="hidden sm:inline ml-1 opacity-70">{s.label}</span>
-              )}
-            </button>
-          ))}
-        </div>
+                    : "bg-white/20 text-white hover:bg-white/30"
+                }`}
+              >
+                <span aria-hidden>{s.X}</span>
+                <span className="opacity-60">vs</span>
+                <span aria-hidden>{s.O}</span>
+                {setId !== s.id && (
+                  <span className="hidden sm:inline ml-1 opacity-70">{s.label}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
 
         <p
           className={`mt-4 ${
