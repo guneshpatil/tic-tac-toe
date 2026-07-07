@@ -399,6 +399,15 @@ export default function Game() {
         >
           {isKids ? "🔄 Play again" : "New round"}
         </button>
+        {isKids && (
+          <button
+            type="button"
+            onClick={resetAll}
+            className="px-4 py-2 rounded-xl bg-white text-sky-700 hover:bg-sky-50 border border-white/40 transition"
+          >
+            🔄 Reset scores
+          </button>
+        )}
         {!isKids && (
           <button
             type="button"
