@@ -15,4 +15,21 @@
   .cell.win {
     @apply ring-4 ring-emerald-400 bg-emerald-500/20;
   }
+  .cell.kids-cell {
+    @apply rounded-3xl bg-white shadow-lg border-4 border-white/70 text-sky-700 active:scale-95;
+  }
+  .cell.kids-cell:hover {
+    @apply bg-sky-50;
+  }
+  .cell.kids-cell.win {
+    @apply ring-4 ring-amber-300 bg-amber-200;
+  }
+  .cell.kids-cell span {
+    animation: pop 0.25s ease-out;
+  }
+  @keyframes pop {
+    0% { transform: scale(0.4); opacity: 0; }
+    60% { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); }
+  }
 }
