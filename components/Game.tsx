@@ -71,6 +71,7 @@ export default function Game() {
     if (wasKids !== isKids) {
       setBoard(emptyBoard(size));
       setTurn("X");
+      setScores(emptyScores());
     }
   }, [isKids, hydrated, setId, size, ai]);
 
