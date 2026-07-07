@@ -379,6 +379,14 @@ export default function Game() {
         </div>
       )}
 
+      {isKids && (
+        <div className="mt-5 grid grid-cols-3 gap-3 text-center">
+          <Score label={set.X} value={scores.X} color={set.xColor} kids />
+          <Score label="🤝" value={scores.draw} color="text-amber-400" kids />
+          <Score label={ai !== "off" ? "🤖" : set.O} value={scores.O} color={set.oColor} kids />
+        </div>
+      )}
+
       <div className="mt-6 flex gap-3 justify-center flex-wrap">
         <button
           type="button"
@@ -483,17 +491,35 @@ function Score({
   label,
   value,
   color,
+  kids,
 }: {
-  label: string;
+  label: string | React.ReactNode;
   value: number;
   color: string;
+  kids?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 py-3">
-      <div className="text-xs uppercase tracking-wider text-slate-400">
+    <div
+      className={`rounded-2xl border py-3 ${
+        kids
+          ? "border-white/40 bg-white/30 backdrop-blur-sm"
+          : "border-slate-800 bg-slate-900/60"
+      }`}
+    >
+      <div
+        className={`text-xs uppercase tracking-wider ${
+          kids ? "text-slate-700" : "text-slate-400"
+        }`}
+      >
         {label}
       </div>
-      <div className={`text-2xl font-bold ${color}`}>{value}</div>
+      <div
+        className={`font-bold ${
+          kids ? "text-4xl" : "text-2xl"
+        } ${kids ? (color.includes("amber") ? "text-amber-600" : color.replace("text-", "text-")) : color}`}
+      >
+        {value}
+      </div>
     </div>
   );
 }
