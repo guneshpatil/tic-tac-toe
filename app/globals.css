@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    @apply h-full bg-slate-950 text-slate-100;
+  }
+}
+
+@layer components {
+  .cell {
+    @apply flex items-center justify-center aspect-square rounded-2xl bg-slate-800/60 border border-slate-700 transition-all duration-200 hover:bg-slate-700/70 active:scale-95;
+  }
+  .cell.win {
+    @apply ring-4 ring-emerald-400 bg-emerald-500/20;
+  }
+}
