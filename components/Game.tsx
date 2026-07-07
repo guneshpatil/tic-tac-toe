@@ -40,6 +40,7 @@ export default function Game() {
   const [size, setSize] = useState<number>(3);
   const [ai, setAi] = useState<AiLevel>("off");
   const [hydrated, setHydrated] = useState(false);
+  const prevIsKidsRef = useRef(mode === "kids");
 
   const isKids = mode === "kids";
   const config: GameConfig = useMemo(
@@ -57,17 +58,19 @@ export default function Game() {
 
   useEffect(() => {
     if (!hydrated) return;
-    if (!isKids && setId !== "classic") setSetId("classic");
+    if (prevIsKidsRef.current && !isKids && setId !== "classic") setSetId("classic");
+    prevIsKidsRef.current = isKids;
   }, [isKids, hydrated, setId]);
 
   useEffect(() => {
     if (!hydrated) return;
-    if (isKids && size !== 3) setSize(3);
+    if (isKids && !prevIsKidsRef.current && size !== 3) setSize(3);
   }, [isKids, hydrated, size]);
 
   useEffect(() => {
     if (!hydrated) return;
-    if (isKids && ai !== "off") setAi("off");
+    if (isKids && !prevIsKidsRef.current && ai !== "off") setAi("off");
+    prevIsKidsRef.current = isKids;
   }, [isKids, hydrated, ai]);
 
   useEffect(() => {
