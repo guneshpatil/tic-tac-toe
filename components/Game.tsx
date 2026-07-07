@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Board, Status } from "@/lib/types";
-import { calculateWinner, isDraw } from "@/lib/game";
-
-const STORAGE_KEY = "ttt:score:v1";
-const MODE_KEY = "ttt:mode:v1";
-const SET_KEY = "ttt:set:v1";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { AiLevel, Board, GameConfig } from "@/lib/types";
+import {
+  STORAGE_KEYS,
+  aiMove,
+  emptyBoard,
+  emptyScores,
+  getStatus,
+  nextTurn,
+} from "@/lib/game";
 
 type Scores = Record<"X" | "O" | "draw", number>;
 type Mode = "adult" | "kids";
@@ -25,17 +28,24 @@ const PLAYER_SETS: PlayerSet[] = [
   { id: "animals",  label: "Animals",        X: "🐱", O: "🐶", xColor: "text-amber-500",  oColor: "text-emerald-500"},
 ];
 
-const emptyScores: Scores = { X: 0, O: 0, draw: 0 };
+const SIZE_OPTIONS = [3, 4, 5] as const;
+const AI_LEVELS: AiLevel[] = ["off", "easy", "hard"];
 
 export default function Game() {
-  const [board, setBoard] = useState<Board>(Array(9).fill(null));
+  const [board, setBoard] = useState<Board>(() => emptyBoard(3));
   const [turn, setTurn] = useState<"X" | "O">("X");
   const [scores, setScores] = useState<Scores>(emptyScores);
   const [mode, setMode] = useState<Mode>("adult");
   const [setId, setSetId] = useState<PlayerSet["id"]>("classic");
+  const [size, setSize] = useState<number>(3);
+  const [ai, setAi] = useState<AiLevel>("off");
   const [hydrated, setHydrated] = useState(false);
 
   const isKids = mode === "kids";
+  const config: GameConfig = useMemo(
+    () => ({ size, winLength: size, ai, aiPlayer: "O" }),
+    [size, ai]
+  );
 
   const set = useMemo(
     () =>
@@ -51,13 +61,27 @@ export default function Game() {
   }, [isKids, hydrated, setId]);
 
   useEffect(() => {
+    if (!hydrated) return;
+    if (isKids && size !== 3) setSize(3);
+  }, [isKids, hydrated, size]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (isKids && ai !== "off") setAi("off");
+  }, [isKids, hydrated, ai]);
+
+  useEffect(() => {
     try {
-      const rawScores = localStorage.getItem(STORAGE_KEY);
-      if (rawScores) setScores({ ...emptyScores, ...JSON.parse(rawScores) });
-      const rawMode = localStorage.getItem(MODE_KEY) as Mode | null;
+      const rawScores = localStorage.getItem(STORAGE_KEYS.score);
+      if (rawScores) setScores({ ...emptyScores(), ...JSON.parse(rawScores) });
+      const rawMode = localStorage.getItem(STORAGE_KEYS.mode) as Mode | null;
       if (rawMode === "adult" || rawMode === "kids") setMode(rawMode);
-      const rawSet = localStorage.getItem(SET_KEY) as PlayerSet["id"] | null;
+      const rawSet = localStorage.getItem(STORAGE_KEYS.set) as PlayerSet["id"] | null;
       if (rawSet && PLAYER_SETS.some((s) => s.id === rawSet)) setSetId(rawSet);
+      const rawSize = Number(localStorage.getItem(STORAGE_KEYS.size));
+      if (rawSize === 3 || rawSize === 4 || rawSize === 5) setSize(rawSize);
+      const rawAi = localStorage.getItem(STORAGE_KEYS.ai) as AiLevel | null;
+      if (rawAi && AI_LEVELS.includes(rawAi)) setAi(rawAi);
     } catch {}
     setHydrated(true);
   }, []);
@@ -65,51 +89,94 @@ export default function Game() {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(scores));
+      localStorage.setItem(STORAGE_KEYS.score, JSON.stringify(scores));
     } catch {}
   }, [scores, hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
     try {
-      localStorage.setItem(MODE_KEY, mode);
+      localStorage.setItem(STORAGE_KEYS.mode, mode);
     } catch {}
   }, [mode, hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
     try {
-      if (isKids) localStorage.setItem(SET_KEY, setId);
-      else localStorage.removeItem(SET_KEY);
+      if (isKids) localStorage.setItem(STORAGE_KEYS.set, setId);
+      else localStorage.removeItem(STORAGE_KEYS.set);
     } catch {}
   }, [setId, isKids, hydrated]);
 
-  const status: Status = useMemo(() => {
-    const w = calculateWinner(board);
-    if (w) return { kind: "won", winner: w.winner as "X" | "O", line: w.line };
-    if (isDraw(board)) return { kind: "draw" };
-    return { kind: "playing", turn };
-  }, [board, turn]);
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      if (!isKids) localStorage.setItem(STORAGE_KEYS.size, String(size));
+      else localStorage.removeItem(STORAGE_KEYS.size);
+    } catch {}
+  }, [size, isKids, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      if (!isKids) localStorage.setItem(STORAGE_KEYS.ai, ai);
+      else localStorage.removeItem(STORAGE_KEYS.ai);
+    } catch {}
+  }, [ai, isKids, hydrated]);
+
+  const status = useMemo(
+    () => getStatus(board, turn, config),
+    [board, turn, config]
+  );
+
+  const aiThinkingRef = useRef(false);
 
   const play = useCallback(
     (i: number) => {
       if (status.kind !== "playing" || board[i]) return;
-      const next = board.slice() as Board;
-      next[i] = turn;
-      setBoard(next);
-      setTurn(turn === "X" ? "O" : "X");
+      setBoard((prev) => {
+        if (prev[i]) return prev;
+        const next = prev.slice();
+        next[i] = turn;
+        return next;
+      });
+      setTurn((t) => nextTurn(t));
     },
     [board, turn, status]
   );
 
+  useEffect(() => {
+    if (!hydrated) return;
+    if (ai === "off") return;
+    if (status.kind !== "playing") return;
+    if (turn !== "O") return;
+    if (aiThinkingRef.current) return;
+    aiThinkingRef.current = true;
+    const t = setTimeout(() => {
+      setBoard((prev) => {
+        const move = aiMove(prev, config, ai);
+        if (move == null || prev[move]) return prev;
+        const next = prev.slice();
+        next[move] = "O";
+        return next;
+      });
+      setTurn((t) => nextTurn(t));
+      aiThinkingRef.current = false;
+    }, 350);
+    return () => {
+      clearTimeout(t);
+      aiThinkingRef.current = false;
+    };
+  }, [turn, status, ai, config, hydrated]);
+
   const reset = useCallback(() => {
-    setBoard(Array(9).fill(null));
+    setBoard(emptyBoard(size));
     setTurn("X");
-  }, []);
+  }, [size]);
 
   const resetAll = useCallback(() => {
     reset();
-    setScores(emptyScores);
+    setScores(emptyScores());
   }, [reset]);
 
   useEffect(() => {
@@ -199,6 +266,45 @@ export default function Game() {
           </div>
         )}
 
+        {!isKids && (
+          <div className="mt-5 space-y-4 text-left">
+            <Slider
+              label="Board size"
+              options={SIZE_OPTIONS.map((n) => ({ value: n, label: `${n} × ${n}` }))}
+              value={size}
+              onChange={(v) => {
+                setSize(v);
+                setBoard(emptyBoard(v));
+                setTurn("X");
+              }}
+            />
+            <Slider
+              label="AI opponent"
+              options={AI_LEVELS.map((l) => ({ value: l, label: l[0].toUpperCase() + l.slice(1) }))}
+              value={ai}
+              onChange={(v) => setAi(v)}
+            />
+          </div>
+        )}
+
+        {isKids && (
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setAi(ai === "off" ? "easy" : "off")}
+              aria-pressed={ai !== "off"}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition flex items-center gap-2 ${
+                ai !== "off"
+                  ? "bg-white text-sky-700 shadow"
+                  : "bg-white/20 text-white hover:bg-white/30"
+              }`}
+            >
+              <span aria-hidden>{ai !== "off" ? "🤖" : "👥"}</span>
+              <span>{ai !== "off" ? "vs Computer (Easy)" : "vs Friend"}</span>
+            </button>
+          </div>
+        )}
+
         <p
           className={`mt-4 ${
             isKids ? "text-2xl font-bold text-white drop-shadow" : "text-lg"
@@ -217,13 +323,14 @@ export default function Game() {
       </header>
 
       <div
-        className={`grid grid-cols-3 gap-3 p-3 rounded-3xl shadow-xl ${
+        className={`grid rounded-3xl shadow-xl ${
           isKids
-            ? "bg-white/40 backdrop-blur-sm gap-4 p-4"
-            : "bg-slate-900/60 border border-slate-800"
+            ? "gap-2 sm:gap-3 p-2 sm:p-3 bg-white/40 backdrop-blur-sm"
+            : "gap-2 p-2 bg-slate-900/60 border border-slate-800"
         }`}
+        style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
         role="grid"
-        aria-label="Tic tac toe board"
+        aria-label={`Tic tac toe board ${size} by ${size}`}
       >
         {board.map((cell, i) => {
           const isWin = status.kind === "won" && status.line.includes(i);
@@ -232,17 +339,25 @@ export default function Game() {
               key={i}
               type="button"
               onClick={() => play(i)}
-              disabled={status.kind !== "playing" || !!cell}
+              disabled={status.kind !== "playing" || !!cell || (ai !== "off" && turn === "O")}
               aria-label={
                 cell ? `Cell ${i + 1}, ${cell}` : `Empty cell ${i + 1}`
               }
               className={`cell ${isWin ? "win" : ""} ${
                 isKids ? "kids-cell" : ""
-              } ${cell === "X" ? set.xColor : cell === "O" ? set.oColor : ""}`}
+              } ${cell === "X" ? set.xColor : cell === "O" ? set.oColor : ""} ${
+                size >= 4 ? "text-3xl sm:text-4xl" : ""
+              }`}
             >
               <span
                 className={`leading-none select-none font-black ${
-                  isKids ? "text-6xl sm:text-7xl" : "text-5xl sm:text-6xl"
+                  isKids
+                    ? size >= 4
+                      ? "text-4xl sm:text-5xl"
+                      : "text-6xl sm:text-7xl"
+                    : size >= 4
+                    ? "text-3xl sm:text-4xl"
+                    : "text-5xl sm:text-6xl"
                 }`}
               >
                 {cell ? symbol(cell) : ""}
@@ -256,7 +371,7 @@ export default function Game() {
         <div className="mt-6 grid grid-cols-3 gap-3 text-center">
           <Score label={set.X} value={scores.X} color={set.xColor} />
           <Score label="Draws" value={scores.draw} color="text-amber-400" />
-          <Score label={set.O} value={scores.O} color={set.oColor} />
+          <Score label={ai !== "off" ? "🤖" : set.O} value={scores.O} color={set.oColor} />
         </div>
       )}
 
@@ -315,6 +430,48 @@ function ModeButton({
     >
       {label}
     </button>
+  );
+}
+
+function Slider<T extends string | number>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wider text-slate-400 mb-1.5">
+        {label}
+      </div>
+      <div className="relative">
+        <div className="flex p-1 rounded-full bg-slate-800 border border-slate-700">
+          {options.map((opt) => {
+            const active = opt.value === value;
+            return (
+              <button
+                key={String(opt.value)}
+                type="button"
+                onClick={() => onChange(opt.value)}
+                aria-pressed={active}
+                className={`flex-1 px-3 py-1.5 rounded-full text-sm font-semibold transition ${
+                  active
+                    ? "bg-slate-100 text-slate-900 shadow"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
