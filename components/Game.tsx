@@ -58,28 +58,21 @@ export default function Game() {
 
   useEffect(() => {
     if (!hydrated) return;
-    if (prevIsKidsRef.current && !isKids && setId !== "classic") setSetId("classic");
+    const wasKids = prevIsKidsRef.current;
     prevIsKidsRef.current = isKids;
-  }, [isKids, hydrated, setId]);
 
-  useEffect(() => {
-    if (!hydrated) return;
-    if (isKids && !prevIsKidsRef.current && size !== 3) setSize(3);
-  }, [isKids, hydrated, size]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    if (prevIsKidsRef.current !== isKids) {
+    if (wasKids && !isKids) {
+      if (setId !== "classic") setSetId("classic");
+    }
+    if (!wasKids && isKids) {
+      if (size !== 3) setSize(3);
+      if (ai !== "off") setAi("off");
+    }
+    if (wasKids !== isKids) {
       setBoard(emptyBoard(size));
       setTurn("X");
     }
-    prevIsKidsRef.current = isKids;
-  }, [isKids, hydrated, size]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    if (isKids && !prevIsKidsRef.current && ai !== "off") setAi("off");
-  }, [isKids, hydrated, ai]);
+  }, [isKids, hydrated, setId, size, ai]);
 
   useEffect(() => {
     try {
